@@ -53,22 +53,7 @@ class Config(object):
             return None
             # raise exceptions.ConfigError("No such attribute: %s" % key)
         result = self._config[key]
-        # Strings starting with `_env:' get evaluated
-        if isinstance(
-                result, compat.basestring) and result.startswith('_env:'):
-            result = result.split(':', 2)
-            varname = result[1]
-            vardefault = '' if len(result) < 3 else result[2]
-            try:
-                result = yaml.load(os.environ.get(varname, vardefault))
-            except Exception as e:
-                raise exceptions.ConfigError(
-                    'Config `%s` (value: `%s`) is not valid: %s' % (
-                        varname, e, result))
-        # Dicts are rewrapped inside a Config object
-        if isinstance(result, dict):
-            result = Config(result)
-        return result
+        return _to_config(key, result)
 
     def __getitem__(self, key):
         return getattr(self, key)
@@ -76,6 +61,29 @@ class Config(object):
     def __contains__(self, key):
         return key in self._config
 
+
+def _to_config(key, result):
+    # Strings starting with `_env:' get evaluated
+    if isinstance(
+            result, compat.basestring) and result.startswith('_env:'):
+        result = result.split(':', 2)
+        varname = result[1]
+        vardefault = '' if len(result) < 3 else result[2]
+        try:
+            result = yaml.load(os.environ.get(varname, vardefault))
+        except Exception as e:
+            raise exceptions.ConfigError(
+                'Config `%s` (value: `%s`) is not valid: %s' % (
+                    varname, e, result))
+    # Dicts are rewrapped inside a Config object
+    if isinstance(result, dict):
+        result = Config(result)
+    elif isinstance(result, list):
+        out = []
+        for item in result:
+            out.append(_to_config(key, item))
+        result = out
+    return result
 
 _config = None
 
