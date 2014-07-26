@@ -22,6 +22,7 @@ from .lib import config
 from .server import env
 from .status import *  # noqa
 from .search import *  # noqa
+from .listen import *  # noqa
 
 cfg = config.load()
 if cfg.standalone:
