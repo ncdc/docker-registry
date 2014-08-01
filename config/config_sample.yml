@@ -153,7 +153,14 @@ elliptics:
     elliptics_logfile: _env:ELLIPTICS_LOGFILE:/dev/stderr
     elliptics_addr_family: _env:ELLIPTICS_ADDR_FAMILY:2
 
-
+kubernetes: &kubernetes
+    <<: *local
+    loglevel: _env:LOGLEVEL:debug
+    listeners:
+      - backend: example
+      - backend: docker_registry.listeners.kubernetes
+        url: http://localhost:14000/api
+        #url: http://localhost:8080/api
 
 # This is the default configuration when no flavor is specified
 dev: &dev
