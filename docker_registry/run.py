@@ -74,7 +74,6 @@ def run_gunicorn():
         '--error-logfile', env.source('GUNICORN_ERROR_LOG_FILE'),
         '--max-requests', '100',
         '-k', 'gevent',
-        '--reload', False if env.source('SETTINGS_FLAVOR') == 'prod' else True,
         '--graceful-timeout', env.source('GUNICORN_GRACEFUL_TIMEOUT'),
         '-t', env.source('GUNICORN_SILENT_TIMEOUT'),
         '-w', env.source('GUNICORN_WORKERS'),
