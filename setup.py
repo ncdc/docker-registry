@@ -49,7 +49,9 @@ packages = ['docker_registry',
             'docker_registry.server',
             'docker_registry.lib',
             'docker_registry.storage',
-            'docker_registry.lib.index']
+            'docker_registry.lib.index',
+            'docker_registry.lib.listener',
+            'docker_registry.listeners']
 
 namespaces = ['docker_registry', 'docker_registry.drivers']
 

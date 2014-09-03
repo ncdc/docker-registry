@@ -20,21 +20,25 @@ store = storage.load()
 
 
 class Listener(BaseListener):
-    url = "http://localhost:8080/api"
-    name_prefix = "localhost"
+    url = "http://localhost:8080/osapi"
+    registry = "localhost:5000"
     authorization = ""
 
     def __init__(self, cfg=None, signals=None):
         if cfg.url is not None:
             self.url = cfg.url
         self.url.strip('/')
+
+        if cfg.registry is not None:
+            self.registry = cfg.registry
+
         super(Listener, self).__init__(cfg, signals)
 
     def tag_created(self, sender, namespace, repository, tag, value, **extra):
         logger.debug("[kubernetes] namespace={0}; repository={1} tag={2} value={3}".format(namespace, repository, tag, value))
         try:
             if tag != value:
-                store.put_content(store.tag_path(namespace, repository, tag), value)
+                store.put_content(store.tag_path(namespace, repository, value), value)
             data = store.get_content(store.image_json_path(value))
             image = json.loads(data)
             self._post_repository_binding(namespace, repository, tag, value, image)
@@ -42,21 +46,19 @@ class Listener(BaseListener):
             logger.exception("unable to update repository")
 
     def _post_repository_binding(self, namespace, repository, tag, image_id, image):
-        url = '{0}/v1beta1/imagesByRepository'.format(self.url)
+        url = '{0}/v1beta1/imageRepositoryMappings'.format(self.url)
         params = {"sync": "true"}
         headers = {'Authorization': self.authorization}
 
-        name = '{0}/{1}/{2}'.format(self.name_prefix, namespace, repository).strip('/')
+        name = "{0}/{1}/{2}".format(self.registry, namespace, repository).strip('/')
         body = {
-            "repositoryName": name,
+            "dockerImageRepository": name,
             "image": {
                 "id": image_id,
-                "reference": image_id,
+                "dockerImageReference": image_id,
                 "metadata": image,
             },
-            "tags": [{
-                tag: image_id,
-            }]
+            "tag": tag
         }
         logger.debug("saving\n"+json.dumps(body))
 
