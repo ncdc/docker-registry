@@ -51,11 +51,12 @@ class Listener(BaseListener):
         headers = {'Authorization': self.authorization}
 
         name = "{0}/{1}/{2}".format(self.registry, namespace, repository).strip('/')
+        ref = "{0}:{1}".format(name, image_id)
         body = {
             "dockerImageRepository": name,
             "image": {
                 "id": image_id,
-                "dockerImageReference": image_id,
+                "dockerImageReference": ref,
                 "metadata": image,
             },
             "tag": tag
