@@ -165,3 +165,23 @@ class TestLoad(unittest.TestCase):
     def test_config_path_exception(self, get):
         config._config = None
         self.assertRaises(config.exceptions.FileNotFoundError, config.load)
+
+    @mock.patch('importlib.import_module')
+    def test_import_modules(self, mockImport):
+        config._config = None
+        p = os.path.join(
+            os.path.dirname(__file__), 'fixtures', 'test_config.yaml')
+        env = {'SETTINGS_FLAVOR': 'IMPORT', 'DOCKER_REGISTRY_CONFIG': p}
+        with mock.patch.dict(config.os.environ, env):
+            config.load()
+            mockImport.assert_called_with('some.module')
+
+    @mock.patch('importlib.import_module')
+    def test_import_modules_import_error(self, mockImport):
+        config._config = None
+        p = os.path.join(
+            os.path.dirname(__file__), 'fixtures', 'test_config.yaml')
+        env = {'SETTINGS_FLAVOR': 'IMPORT', 'DOCKER_REGISTRY_CONFIG': p}
+        with mock.patch.dict(config.os.environ, env):
+            mockImport.side_effect = ImportError()
+            self.assertRaises(config.exceptions.ConfigError, config.load)

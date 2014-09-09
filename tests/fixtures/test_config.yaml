@@ -31,3 +31,7 @@ ENV:
     bugger: _env:BUGGER:bug:me:endlessly
     array: _env:ARRAY:[one, two, three]
     dict: _env:DICT
+
+IMPORT:
+    import_modules:
+        - some.module

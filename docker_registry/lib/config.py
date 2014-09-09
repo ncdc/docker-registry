@@ -2,6 +2,8 @@
 
 import os
 
+import importlib  # noqa
+
 import rsa
 import yaml
 
@@ -117,5 +119,12 @@ def load():
 
     if _config.index_endpoint:
         _config.index_endpoint = _config.index_endpoint.strip('/')
+
+    if _config.import_modules:
+        for module in _config.import_modules:
+            try:
+                importlib.import_module(module)
+            except ImportError:
+                raise exceptions.ConfigError("Failed to import '%s'" % module)
 
     return _config
