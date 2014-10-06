@@ -44,6 +44,6 @@ else:
     stderr_logger = logging.StreamHandler()
     stderr_logger.setLevel(level)
     stderr_logger.setFormatter(
-        logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+        logging.Formatter('%(asctime)s %(levelname)s: [%(name)s] %(message)s'))
     app.logger.addHandler(stderr_logger)
     application = app

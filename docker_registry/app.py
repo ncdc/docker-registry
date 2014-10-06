@@ -15,7 +15,7 @@ import flask
 # configure logging prior to subsequent imports which assume
 # logging has been configured
 cfg = config.load()
-logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s',
+logging.basicConfig(format='%(asctime)s %(levelname)s: [%(name)s] %(message)s',
                     level=getattr(logging, cfg.loglevel.upper()),
                     datefmt="%d/%b/%Y:%H:%M:%S %z")
 
