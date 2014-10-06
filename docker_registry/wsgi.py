@@ -27,7 +27,7 @@ if cfg.search_backend:
     from .search import *  # noqa
 
 if cfg.standalone:
-    # If standalone mode is enabled, load the fake Index routes
+    # If standalone mode is enabled, load the Index routes
     from .index import *  # noqa
 
 if __name__ == '__main__':
