@@ -68,6 +68,9 @@ type ManifestService interface {
 
 	// Delete removes the named manifest, if it exists.
 	Delete(name, tag string) error
+
+	Mark(name, tag, digest string) error
+	Unmark(name, tag, digest string) error
 }
 
 // LayerService provides operations on layer files in a backend storage.

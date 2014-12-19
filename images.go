@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker-registry/api/v2"
 	"github.com/docker/docker-registry/digest"
 	"github.com/docker/docker-registry/storage"
@@ -18,6 +17,7 @@ func imageManifestDispatcher(ctx *Context, r *http.Request) http.Handler {
 	imageManifestHandler := &imageManifestHandler{
 		Context: ctx,
 		Tag:     ctx.vars["tag"],
+		Digest:  ctx.vars["digest"],
 	}
 
 	imageManifestHandler.log = imageManifestHandler.log.WithField("tag", imageManifestHandler.Tag)
@@ -29,7 +29,7 @@ func imageManifestDispatcher(ctx *Context, r *http.Request) http.Handler {
 	}
 }
 
-func imageManifestByDigestDispatcher(ctx *Context, r *http.Request) http.Handler {
+func markManifestDispatcher(ctx *Context, r *http.Request) http.Handler {
 	imageManifestHandler := &imageManifestHandler{
 		Context: ctx,
 		Tag:     ctx.vars["tag"],
@@ -39,7 +39,8 @@ func imageManifestByDigestDispatcher(ctx *Context, r *http.Request) http.Handler
 	imageManifestHandler.log = imageManifestHandler.log.WithField("tag", imageManifestHandler.Tag)
 
 	return handlers.MethodHandler{
-		"GET": http.HandlerFunc(imageManifestHandler.GetImageManifestByDigest),
+		"POST":   http.HandlerFunc(imageManifestHandler.PostImageManifestMark),
+		"DELETE": http.HandlerFunc(imageManifestHandler.DeleteImageManifestMark),
 	}
 }
 
@@ -54,24 +55,13 @@ type imageManifestHandler struct {
 // GetImageManifest fetches the image manifest from the storage backend, if it exists.
 func (imh *imageManifestHandler) GetImageManifest(w http.ResponseWriter, r *http.Request) {
 	manifests := imh.services.Manifests()
-	manifest, err := manifests.Get(imh.Name, imh.Tag)
-
-	if err != nil {
-		imh.Errors.Push(v2.ErrorCodeManifestUnknown, err)
-		w.WriteHeader(http.StatusNotFound)
-		return
+	var manifest *storage.SignedManifest
+	var err error
+	if len(imh.Digest) > 0 {
+		manifest, err = manifests.GetByDigest(imh.Name, imh.Tag, imh.Digest)
+	} else {
+		manifest, err = manifests.Get(imh.Name, imh.Tag)
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Length", fmt.Sprint(len(manifest.Raw)))
-	w.Write(manifest.Raw)
-}
-
-// GetImageManifestByDigest fetches the image manifest from the storage backend, if it exists.
-func (imh *imageManifestHandler) GetImageManifestByDigest(w http.ResponseWriter, r *http.Request) {
-	log.Infoln("GET IMAGE MANIFEST BY DIGEST!")
-	manifests := imh.services.Manifests()
-	manifest, err := manifests.GetByDigest(imh.Name, imh.Tag, imh.Digest)
 
 	if err != nil {
 		imh.Errors.Push(v2.ErrorCodeManifestUnknown, err)
@@ -134,6 +124,42 @@ func (imh *imageManifestHandler) PutImageManifest(w http.ResponseWriter, r *http
 func (imh *imageManifestHandler) DeleteImageManifest(w http.ResponseWriter, r *http.Request) {
 	manifests := imh.services.Manifests()
 	if err := manifests.Delete(imh.Name, imh.Tag); err != nil {
+		switch err := err.(type) {
+		case storage.ErrUnknownManifest:
+			imh.Errors.Push(v2.ErrorCodeManifestUnknown, err)
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			imh.Errors.Push(v2.ErrorCodeUnknown, err)
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Length", "0")
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (imh *imageManifestHandler) PostImageManifestMark(w http.ResponseWriter, r *http.Request) {
+	manifests := imh.services.Manifests()
+	if err := manifests.Mark(imh.Name, imh.Tag, imh.Digest); err != nil {
+		switch err := err.(type) {
+		case storage.ErrUnknownManifest:
+			imh.Errors.Push(v2.ErrorCodeManifestUnknown, err)
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			imh.Errors.Push(v2.ErrorCodeUnknown, err)
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Length", "0")
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (imh *imageManifestHandler) DeleteImageManifestMark(w http.ResponseWriter, r *http.Request) {
+	manifests := imh.services.Manifests()
+	if err := manifests.Unmark(imh.Name, imh.Tag, imh.Digest); err != nil {
 		switch err := err.(type) {
 		case storage.ErrUnknownManifest:
 			imh.Errors.Push(v2.ErrorCodeManifestUnknown, err)

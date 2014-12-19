@@ -55,6 +55,15 @@ func (errs ErrManifestVerification) Error() string {
 	return fmt.Sprintf("errors verifying manifest: %v", strings.Join(parts, ","))
 }
 
+func manifestDigest(manifest Manifest) (string, error) {
+	manifestBytes, err := json.Marshal(manifest)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(manifestBytes)
+	return fmt.Sprintf("%x", digest), nil
+}
+
 type manifestStore struct {
 	driver       storagedriver.StorageDriver
 	pathMapper   *pathMapper
@@ -186,22 +195,66 @@ func (ms *manifestStore) Put(name, tag string, manifest *SignedManifest) error {
 
 	// TODO(stevvooe): Should we get old manifest first? Perhaps, write, then
 	// move to ensure a valid manifest?
+	log.Infof("Retrieving old manifest for %s:%s", name, tag)
+	oldManifest, err := ms.Get(name, tag)
+	if err != nil {
+		if _, isUnknownManifestError := err.(ErrUnknownManifest); !isUnknownManifestError {
+			return err
+		}
+	}
 
 	if err := ms.driver.PutContent(p, manifest.Raw); err != nil {
 		return err
 	}
 
-	log.Infoln("CALC DIGEST")
-	digestBytes := sha256.Sum256(manifest.Raw)
-	log.Infoln("GET PATH BY DIGEST")
-	p, err = ms.pathByDigest(name, tag, fmt.Sprintf("%x", (digestBytes[:sha256.Size])))
+	digest, err := manifestDigest(manifest.Manifest)
 	if err != nil {
-		log.Infoln("ERROR GET PATH BY DIGEST")
+		return nil
+	}
+	digestPath, err := ms.pathByDigest(name, tag, digest)
+	if err != nil {
 		return err
 	}
 
-	log.Infoln("PUT CONTENT PATH BY DIGEST")
-	return ms.driver.PutContent(p, manifest.Raw)
+	log.Infof("New manifest has digest %s", digest)
+
+	err = ms.driver.PutContent(digestPath, manifest.Raw)
+	if err != nil {
+		return err
+	}
+
+	if oldManifest != nil {
+		log.Infoln("Have old manifest")
+		oldDigest, err := manifestDigest(oldManifest.Manifest)
+		if err != nil {
+			return err
+		}
+
+		log.Infof("Old manifest digest = %s", oldDigest)
+
+		markPath, err := ms.markPath(name, tag, oldDigest)
+		if err != nil {
+			return err
+		}
+		_, err = ms.driver.Stat(markPath)
+		if err != nil {
+			if _, isNotFoundError := err.(storagedriver.PathNotFoundError); !isNotFoundError {
+				return err
+			}
+			log.Info("Manifest is not marked")
+			if oldDigest == digest {
+				log.Info("Repush of existing manifest, not deleting old manifest")
+				return nil
+			}
+			oldDigestPath, err := ms.pathByDigest(name, tag, oldDigest)
+			if err != nil {
+				return err
+			}
+			return ms.driver.Delete(oldDigestPath)
+		}
+	}
+
+	return nil
 }
 
 func (ms *manifestStore) Delete(name, tag string) error {
@@ -224,16 +277,15 @@ func (ms *manifestStore) Delete(name, tag string) error {
 		}
 	}
 
-	log.Infoln("CALC DIGEST")
-	digestBytes := sha256.Sum256(manifest.Raw)
-	log.Infoln("GET PATH BY DIGEST")
-	p, err = ms.pathByDigest(name, tag, fmt.Sprintf("%x", (digestBytes[:sha256.Size])))
+	digest, err := manifestDigest(manifest.Manifest)
 	if err != nil {
-		log.Infoln("ERROR GET PATH BY DIGEST")
+		return err
+	}
+	p, err = ms.pathByDigest(name, tag, digest)
+	if err != nil {
 		return err
 	}
 
-	log.Infoln("DELETE CONTENT PATH BY DIGEST")
 	if err := ms.driver.Delete(p); err != nil {
 		switch err := err.(type) {
 		case storagedriver.PathNotFoundError, *storagedriver.PathNotFoundError:
@@ -249,6 +301,70 @@ func (ms *manifestStore) Delete(name, tag string) error {
 	return nil
 }
 
+func (ms *manifestStore) Mark(name, tag, digest string) error {
+	if len(digest) == 0 {
+		if manifest, err := ms.Get(name, tag); err != nil {
+			return err
+		} else {
+			digest, err = manifestDigest(manifest.Manifest)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	p, err := ms.markPath(name, tag, digest)
+	if err != nil {
+		return err
+	}
+
+	err = ms.driver.PutContent(p, []byte("1"))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (ms *manifestStore) Unmark(name, tag, digest string) error {
+	manifest, err := ms.Get(name, tag)
+	if err != nil {
+		return err
+	}
+	tagDigest, err := manifestDigest(manifest.Manifest)
+	if err != nil {
+		return err
+	}
+
+	if len(digest) == 0 {
+		digest = tagDigest
+	}
+
+	p, err := ms.markPath(name, tag, digest)
+	if err != nil {
+		return err
+	}
+
+	err = ms.driver.Delete(p)
+	if err != nil {
+		return err
+	}
+
+	if tagDigest != digest {
+		p, err := ms.pathByDigest(name, tag, digest)
+		if err != nil {
+			return err
+		}
+
+		err = ms.driver.Delete(p)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (ms *manifestStore) path(name, tag string) (string, error) {
 	return ms.pathMapper.path(manifestPathSpec{
 		name: name,
@@ -258,6 +374,14 @@ func (ms *manifestStore) path(name, tag string) (string, error) {
 
 func (ms *manifestStore) pathByDigest(name, tag, digest string) (string, error) {
 	return ms.pathMapper.path(manifestByDigestPathSpec{
+		name:   name,
+		tag:    tag,
+		digest: digest,
+	})
+}
+
+func (ms *manifestStore) markPath(name, tag, digest string) (string, error) {
+	return ms.pathMapper.path(markManifestPathSpec{
 		name:   name,
 		tag:    tag,
 		digest: digest,
