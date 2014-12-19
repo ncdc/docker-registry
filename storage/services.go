@@ -61,6 +61,8 @@ type ManifestService interface {
 	// Get retrieves the named manifest, if it exists.
 	Get(name, tag string) (*SignedManifest, error)
 
+	GetByDigest(name, tag, digest string) (*SignedManifest, error)
+
 	// Put creates or updates the named manifest.
 	Put(name, tag string, manifest *SignedManifest) error
 

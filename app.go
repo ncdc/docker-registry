@@ -46,6 +46,7 @@ func NewApp(configuration configuration.Configuration) *App {
 		return http.HandlerFunc(apiBase)
 	})
 	app.register(v2.RouteNameManifest, imageManifestDispatcher)
+	app.register(v2.RouteNameManifestByDigest, imageManifestByDigestDispatcher)
 	app.register(v2.RouteNameTags, tagsDispatcher)
 	app.register(v2.RouteNameBlob, layerDispatcher)
 	app.register(v2.RouteNameBlobUpload, layerUploadDispatcher)

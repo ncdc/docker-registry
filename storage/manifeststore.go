@@ -1,11 +1,13 @@
 package storage
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"path"
 	"strings"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker-registry/storagedriver"
 	"github.com/docker/libtrust"
 )
@@ -144,6 +146,34 @@ func (ms *manifestStore) Get(name, tag string) (*SignedManifest, error) {
 	return &manifest, nil
 }
 
+func (ms *manifestStore) GetByDigest(name, tag, digest string) (*SignedManifest, error) {
+	p, err := ms.pathByDigest(name, tag, digest)
+	if err != nil {
+		return nil, err
+	}
+
+	content, err := ms.driver.GetContent(p)
+	if err != nil {
+		switch err := err.(type) {
+		case storagedriver.PathNotFoundError, *storagedriver.PathNotFoundError:
+			return nil, ErrUnknownManifest{Name: name, Tag: tag}
+		default:
+			return nil, err
+		}
+	}
+
+	var manifest SignedManifest
+
+	if err := json.Unmarshal(content, &manifest); err != nil {
+		// TODO(stevvooe): Corrupted manifest error?
+		return nil, err
+	}
+
+	// TODO(stevvooe): Verify the manifest here?
+
+	return &manifest, nil
+}
+
 func (ms *manifestStore) Put(name, tag string, manifest *SignedManifest) error {
 	p, err := ms.path(name, tag)
 	if err != nil {
@@ -157,11 +187,30 @@ func (ms *manifestStore) Put(name, tag string, manifest *SignedManifest) error {
 	// TODO(stevvooe): Should we get old manifest first? Perhaps, write, then
 	// move to ensure a valid manifest?
 
+	if err := ms.driver.PutContent(p, manifest.Raw); err != nil {
+		return err
+	}
+
+	log.Infoln("CALC DIGEST")
+	digestBytes := sha256.Sum256(manifest.Raw)
+	log.Infoln("GET PATH BY DIGEST")
+	p, err = ms.pathByDigest(name, tag, fmt.Sprintf("%x", (digestBytes[:sha256.Size])))
+	if err != nil {
+		log.Infoln("ERROR GET PATH BY DIGEST")
+		return err
+	}
+
+	log.Infoln("PUT CONTENT PATH BY DIGEST")
 	return ms.driver.PutContent(p, manifest.Raw)
 }
 
 func (ms *manifestStore) Delete(name, tag string) error {
 	p, err := ms.path(name, tag)
+	if err != nil {
+		return err
+	}
+
+	manifest, err := ms.Get(name, tag)
 	if err != nil {
 		return err
 	}
@@ -175,6 +224,28 @@ func (ms *manifestStore) Delete(name, tag string) error {
 		}
 	}
 
+	log.Infoln("CALC DIGEST")
+	digestBytes := sha256.Sum256(manifest.Raw)
+	log.Infoln("GET PATH BY DIGEST")
+	p, err = ms.pathByDigest(name, tag, fmt.Sprintf("%x", (digestBytes[:sha256.Size])))
+	if err != nil {
+		log.Infoln("ERROR GET PATH BY DIGEST")
+		return err
+	}
+
+	log.Infoln("DELETE CONTENT PATH BY DIGEST")
+	if err := ms.driver.Delete(p); err != nil {
+		switch err := err.(type) {
+		case storagedriver.PathNotFoundError, *storagedriver.PathNotFoundError:
+			//TODO this should never happen, but if it does, it probably should be swallowed
+			return ErrUnknownManifest{Name: name, Tag: tag}
+		default:
+			return err
+		}
+	}
+
+	//TODO if we just deleted the last digest for a tag, we should delete manifestsbydigest/<tag> as well
+
 	return nil
 }
 
@@ -182,6 +253,14 @@ func (ms *manifestStore) path(name, tag string) (string, error) {
 	return ms.pathMapper.path(manifestPathSpec{
 		name: name,
 		tag:  tag,
+	})
+}
+
+func (ms *manifestStore) pathByDigest(name, tag, digest string) (string, error) {
+	return ms.pathMapper.path(manifestByDigestPathSpec{
+		name:   name,
+		tag:    tag,
+		digest: digest,
 	})
 }
 
