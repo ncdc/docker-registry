@@ -21,6 +21,9 @@ const storagePathVersion = "v2"
 // 				-><name>/
 // 					-> manifests/
 // 						<manifests by tag name>
+//          -> manifest_digests/
+//					   -> <tag>
+//						    <hex digest of manifest>
 // 					-> layers/
 // 						<layer links to blob store>
 //			-> blob/<algorithm>
@@ -35,6 +38,7 @@ const storagePathVersion = "v2"
 // We cover the path formats implemented by this path mapper below.
 //
 // 	manifestPathSpec: <root>/v2/repositories/<name>/manifests/<tag>
+// 	manifestDigestPathSpec: <root>/v2/repositories/<name>/manifest_digests/<tag>/<hex digest>
 // 	layerLinkPathSpec: <root>/v2/repositories/<name>/layers/tarsum/<tarsum version>/<tarsum hash alg>/<tarsum hash>
 // 	blobPathSpec: <root>/v2/blob/<algorithm>/<first two hex bytes of digest>/<hex digest>
 //
@@ -69,10 +73,8 @@ func (pm *pathMapper) path(spec pathSpec) (string, error) {
 	case manifestPathSpec:
 		// TODO(sday): May need to store manifest by architecture.
 		return path.Join(append(repoPrefix, v.name, "manifests", v.tag)...), nil
-	case manifestByDigestPathSpec:
-		return path.Join(append(repoPrefix, v.name, "manifestsbydigest", v.tag, v.digest)...), nil
-	case markManifestPathSpec:
-		return path.Join(append(repoPrefix, v.name, "manifestmarks", v.tag, v.digest)...), nil
+	case manifestDigestPathSpec:
+		return path.Join(append(repoPrefix, v.name, "manifest_digests", v.tag, v.digest)...), nil
 	case layerLinkPathSpec:
 		components, err := digestPathComoponents(v.digest)
 		if err != nil {
@@ -132,24 +134,16 @@ type manifestPathSpec struct {
 
 func (manifestPathSpec) pathSpec() {}
 
-// manifestByDigestPathSpec describes the path elements used to build a manifest path
-// for a specific digest version of that manifest. The contents should be a signed
+// manifestDigestPathSpec describes the path elements used to build a path
+// for a specific manifest/digest combination. The contents should be a signed
 // manifest json file.
-type manifestByDigestPathSpec struct {
+type manifestDigestPathSpec struct {
 	name   string
 	tag    string
 	digest string
 }
 
-func (manifestByDigestPathSpec) pathSpec() {}
-
-type markManifestPathSpec struct {
-	name   string
-	tag    string
-	digest string
-}
-
-func (markManifestPathSpec) pathSpec() {}
+func (manifestDigestPathSpec) pathSpec() {}
 
 // layerLink specifies a path for a layer link, which is a file with a blob
 // id. The layer link will contain a content addressable blob id reference

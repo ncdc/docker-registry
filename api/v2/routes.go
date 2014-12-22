@@ -8,20 +8,18 @@ import (
 // The following are definitions of the name under which all V2 routes are
 // registered. These symbols can be used to look up a route based on the name.
 const (
-	RouteNameBase                 = "base"
-	RouteNameManifest             = "manifest"
-	RouteNameMarkManifest         = "mark-manifest"
-	RouteNameManifestByDigest     = "manifest-by-digest"
-	RouteNameMarkManifestByDigest = "mark-manifest-by-digest"
-	RouteNameTags                 = "tags"
-	RouteNameBlob                 = "blob"
-	RouteNameBlobUpload           = "blob-upload"
-	RouteNameBlobUploadChunk      = "blob-upload-chunk"
+	RouteNameBase            = "base"
+	RouteNameManifest        = "manifest"
+	RouteNameManifestDigest  = "manifest-digest"
+	RouteNameTags            = "tags"
+	RouteNameBlob            = "blob"
+	RouteNameBlobUpload      = "blob-upload"
+	RouteNameBlobUploadChunk = "blob-upload-chunk"
 )
 
 var allEndpoints = []string{
 	RouteNameManifest,
-	RouteNameManifestByDigest,
+	RouteNameManifestDigest,
 	RouteNameTags,
 	RouteNameBlob,
 	RouteNameBlobUpload,
@@ -50,15 +48,7 @@ func Router() *mux.Router {
 	// GET      /v2/<name>/manifest/<tag>/<digest>	Image Manifest	Fetch the image manifest identified by name and tag and digest.
 	router.
 		Path("/v2/{name:" + common.RepositoryNameRegexp.String() + "}/manifests/{tag:" + common.TagNameRegexp.String() + "}/{digest:[a-zA-Z0-9]{32}}").
-		Name(RouteNameManifestByDigest)
-
-	router.
-		Path("/v2/{name:" + common.RepositoryNameRegexp.String() + "}/manifests/{tag:" + common.TagNameRegexp.String() + "}/mark").
-		Name(RouteNameMarkManifest)
-
-	router.
-		Path("/v2/{name:" + common.RepositoryNameRegexp.String() + "}/manifests/{tag:" + common.TagNameRegexp.String() + "}/{digest:[a-zA-Z0-9]+}/mark").
-		Name(RouteNameMarkManifestByDigest)
+		Name(RouteNameManifestDigest)
 
 	// GET	/v2/<name>/tags/list	Tags	Fetch the tags under the repository identified by name.
 	router.

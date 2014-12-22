@@ -58,19 +58,15 @@ type ManifestService interface {
 	// Exists returns true if the layer exists.
 	Exists(name, tag string) (bool, error)
 
-	// Get retrieves the named manifest, if it exists.
-	Get(name, tag string) (*SignedManifest, error)
-
-	GetByDigest(name, tag, digest string) (*SignedManifest, error)
+	// Get retrieves the named manifest, if it exists. If digest is specified,
+	// Get retrieves the named manifest having that digest, if it exists.
+	Get(name, tag, digest string) (*SignedManifest, error)
 
 	// Put creates or updates the named manifest.
 	Put(name, tag string, manifest *SignedManifest) error
 
 	// Delete removes the named manifest, if it exists.
 	Delete(name, tag string) error
-
-	Mark(name, tag, digest string) error
-	Unmark(name, tag, digest string) error
 }
 
 // LayerService provides operations on layer files in a backend storage.
